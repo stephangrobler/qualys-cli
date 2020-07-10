@@ -5,7 +5,6 @@ const figlet = require('figlet');
 const log = require('./lib/logger');
 const logger = log.getLogger();
 
-const files = require('./lib/files');
 const inquirer = require('./lib/inquirer');
 const api = require('./lib/qualys-api');
 const hostAssets = require('./lib/host-assets');
@@ -24,15 +23,20 @@ console.log(
   chalk.yellow(figlet.textSync(pkg.name, { horizontalLayout: 'full' }))
 );
 
-const username = conf.get('username');
-const password = conf.get('password');
-const apiUri = conf.get('api');
+let username = conf.get('username');
+let password = conf.get('password');
+let apiUri = conf.get('api');
 
 const checkCredentials = async () => {
   if (!username || !password) {
     const credentials = await inquirer.askCredentials();
     conf.set('username', credentials.username);
     conf.set('password', credentials.password);
+    conf.set('api', credentials.api);
+    username = conf.get('username');
+    password = conf.get('password');
+    apiUri = conf.get('api');
+
   } else {
     logger.info(`Logged in as ${username} using api: ${apiUri}`);
   }
@@ -45,7 +49,6 @@ const getHostById = hostAssets.getById;
 const searchTag = tags.searchTagsByName;
 
 const addTagToHost = async (tag, host) => {
-  logger.debug(`Starting update`);
   const status = new Spinner(`Updating host ${host.id} - ${host.name}: adding tag ${tag.id} - ${tag.name}`);
   const serviceRequest = {
     ServiceRequest: {

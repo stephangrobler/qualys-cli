@@ -9,6 +9,11 @@ Install
 * Ensure you have nodejs installed
 * in the console, run: `npm install`
 
+Authentication:
+---------------
+
+If you run the first time, it will automatically ask you to login. The API uri is the one specified by the Qualys documentation to use.
+
 Commands:
 *****
 To run any command you start by typing: `node index.js` followed by the a command below
