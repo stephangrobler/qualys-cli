@@ -3,12 +3,13 @@ const chalk = require('chalk');
 const clear = require('clear');
 const figlet = require('figlet');
 const log = require('./lib/logger');
-
 const logger = log.getLogger();
 
 const files = require('./lib/files');
 const inquirer = require('./lib/inquirer');
 const api = require('./lib/qualys-api');
+const hostAssets = require('./lib/host-assets');
+const tags = require('./lib/tags');
 
 const { Spinner } = require('clui');
 const Configstore = require('configstore');
@@ -37,99 +38,16 @@ const checkCredentials = async () => {
   }
 };
 
-const searchHosts = async (hostName, tagName) => {
-  const status = new Spinner('Fetching host data...');
-  logger.debug(`searchHosts -> hostName: ${hostName}, tagName: ${tagName}`);
-  const requestUri = '/qps/rest/2.0/search/am/hostasset';
-  const postRequest = {
-    ServiceRequest: {
-      preferences: {
-        startFromOffset: 1,
-        limitResults: 10,
-      },
-      filters: {
-        Criteria: [
-          {
-            field: 'name',
-            operator: 'CONTAINS',
-            value: hostName,
-          },
-        ],
-      },
-    },
-  };
+const searchHosts = hostAssets.getWithQuery;
+const getHostById = hostAssets.getById;
 
-  if (tagName) {
-    const tagCriteria = {
-      field: 'tagName',
-      operator: 'EQUALS',
-      value: tagName,
-    };
-    postRequest.ServiceRequest.filters.Criteria = [
-      tagCriteria,
-      ...postRequest.ServiceRequest.filters.Criteria,
-    ];
-  }
 
-  status.start();
-  const result = await api.post(requestUri, postRequest);
-  status.stop();
-  return result.data.ServiceResponse.data;
-};
+const searchTag = tags.searchTagsByName;
 
-const getHostById = async (id) => {
-  const requestUri = '/qps/rest/2.0/get/am/hostasset/' + id;
-  const result = await api.get(requestUri);
-
-  return result.data.ServiceResponse.data[0].HostAsset;
-};
-
-const searchTag = async (tagName) => {
-  const status = new Spinner('Fetching tag data...');
-  const requestUri = '/qps/rest/2.0/search/am/tag';
-  const postRequest = {
-    ServiceRequest: {
-      preferences: {
-        startFromOffset: 1,
-        limitResults: 10,
-      },
-      filters: {
-        Criteria: [
-          {
-            field: 'name',
-            operator: 'CONTAINS',
-            value: tagName,
-          },
-        ],
-      },
-    },
-  };
-
-  status.start();
-  const searchResult = await api.post(requestUri, postRequest);
-  status.stop();
-  const tagList = searchResult.data.ServiceResponse.data;
-  if (!tagList || tagList.length === 0) {
-    console.log(chalk.red(`No tags found for search: ${tagName}`));
-    return;
-  }
-  return result.data.ServiceResponse.data;
-};
-
-const addTagToHost = async (tagName, hostName) => {
-  const hostList = await searchHosts(hostName);
-
-  const host = hostList[0].HostAsset;
-  const tagList = await searchTag(tagName);
-  const tag = tagList[0].Tag;
-
-  if (tag) {
-    const TagSimple = { TagSimle: { id: tag.id, name: tag.name } };
-    host.tags.list = [TagSimple, ...host.tags.list];
-  }
-
-  const status = new Spinner('Updating host data...');
-  const putRequest = {
+const addTagToHost = async (tag, host) => {
+  logger.debug(`Starting update`);
+  const status = new Spinner(`Updating host ${host.id} - ${host.name}: adding tag ${tag.id} - ${tag.name}`);
+  const serviceRequest = {
     ServiceRequest: {
       data: {
         HostAsset: {
@@ -143,15 +61,12 @@ const addTagToHost = async (tagName, hostName) => {
 
   try {
     status.start();
-    const result = await api.post(
-      '/qps/rest/2.0/update/am/hostasset/' + host.id,
-      putRequest
-    );
+    await hostAssets.update(host.id, serviceRequest);
     status.stop();
-    console.log(chalk.green(`Updated succesfully: ${host.id}`));
+    logger.info(chalk.green(`Updated succesfully: ${host.id}`));
   } catch (err) {
     status.stop();
-    console.log(err);
+    logger.error(err);
   }
 };
 
@@ -281,6 +196,34 @@ const updateNameWithDomainName = async (hostName) => {
   }
 };
 
+const addTagToHosts = async (options) => {
+  
+  let tag = null;
+  if (!options.tagToAdd) {
+    logger.warn(`You need to add a tag name option: --tagToAdd=""`);
+    return;
+  } else {
+    const tagList = await tags.searchTagsByName(options.tagToAdd);
+    if (!tagList || tagList.length === 0){
+      logger.warn(`No tags found for ${options.tagToAdd}`);
+      return;
+    } else {
+      tag = tagList[0].Tag;
+      logger.debug(`Tag found: ${tag.id} - ${tag.name}`);
+    }
+  }
+  if (options.hostIds){
+    let hostIds = options.hostIds + '';
+    hostIds = hostIds.split(',');
+    for (let index = 0; index < hostIds.length; index++) {
+      const id = hostIds[index];
+      const host = await hostAssets.getById(id);
+      await addTagToHost(tag, host);
+    }
+  }
+}
+
+
 (async () => {
   try {
     await checkCredentials();
@@ -303,7 +246,11 @@ const updateNameWithDomainName = async (hostName) => {
         await updateNameWithDomainName(argv.hostName);
         break;
       case 'getAssetList':
-        await searchHosts(argv.hostName, argv.tagName);
+        const results = await searchHosts(argv.hostName, argv.tagName);
+        logger.info(results);
+        break;
+      case 'add-tag-to-hosts':
+        const addTagToHostsResults = await addTagToHosts(argv);
         break;
       case 'update-hosts-with-domain':
         await updateHostsWithDomain(argv.hostName, argv.tagName);
