@@ -73,16 +73,34 @@ const addTagToHost = async (tag, host) => {
   }
 };
 
-const removeTagFromHost = async (tagName, hostName) => {
-  const hostList = await searchHosts(hostName);
-  const host = hostList[0].HostAsset;
+const removeTagFromHosts = async (args) => {  
+  if (args.hostIds.indexOf(',') > -1) {
+    hosts = args.hostIds.split(',');
+  } else {
+    hosts = args.hostIds;
+  }
+
+  for(let x = 0; x < hosts.length; x++) {
+    await removeTagFromHost(args.tagName, null, hosts[x]);
+  }
+}
+
+const removeTagFromHost = async (tagName, hostName, hostId) => {
+  let host = {};
+  if (hostName) {
+    const hostList = await searchHosts(hostName);
+    host = hostList[0].HostAsset;
+  }
+
+  if (hostId) {
+    host = { id: hostId };    
+  }
   // const host = await getHostById(104930684);
   const tagList = await searchTag(tagName);
   const tag = tagList[0].Tag;
 
   if (tag) {
-    const TagSimple = { TagSimle: { id: tag.id, name: tag.name } };
-    host.tags.list = [TagSimple, ...host.tags.list];
+    const TagSimple = { TagSimle: { id: tag.id, name: tag.name } };    
   }
 
   const status = new Spinner(`Removing ${tagName} from host data...`);
@@ -254,6 +272,9 @@ const addTagToHosts = async (options) => {
         break;
       case 'add-tag-to-hosts':
         const addTagToHostsResults = await addTagToHosts(argv);
+        break;
+      case 'remove-tag-from-hosts':
+        const removeTagToHostsResults = await removeTagFromHosts(argv);
         break;
       case 'update-hosts-with-domain':
         await updateHostsWithDomain(argv.hostName, argv.tagName);

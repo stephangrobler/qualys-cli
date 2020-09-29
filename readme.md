@@ -5,9 +5,10 @@ Qualys-CLI
 
 Install
 -------
-* Extract files into folder
 * Ensure you have nodejs installed
-* in the console, run: `npm install`
+* Extract files into a folder e.g. `c:\qualys-cli`
+* open console in the folder and enter the following command: `npm install`
+* This should install the necessary files required by the application.
 
 Authentication:
 ---------------
